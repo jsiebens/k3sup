@@ -62,7 +62,7 @@ func Test_loadPublickeyEncrypted(t *testing.T) {
 	}
 
 	tmpfile.Close()
-	_, _, err = loadPublickey(fileName)
+	_, _, err = loadAuthMethod(fileName)
 	if errors.Is(err, want) {
 		t.Fatalf("want: %q, but got: %q", want, err.Error())
 	}

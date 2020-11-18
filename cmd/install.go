@@ -41,7 +41,7 @@ func MakeInstall() *cobra.Command {
 	command.Flags().IP("ip", net.ParseIP("127.0.0.1"), "Public IP of node")
 	command.Flags().String("user", "root", "Username for SSH login")
 
-	command.Flags().String("ssh-key", "~/.ssh/id_rsa", "The ssh key to use for remote login")
+	command.Flags().String("ssh-key", "", "The ssh key to use for remote login")
 	command.Flags().Int("ssh-port", 22, "The port on which to connect for ssh")
 	command.Flags().Bool("sudo", true, "Use sudo for installation. e.g. set to false when using the root user and no sudo is available.")
 	command.Flags().Bool("skip-install", false, "Skip the k3s installer")
@@ -186,9 +186,9 @@ Provide the --local-path flag with --merge if a kubeconfig already exists in som
 
 		sshKeyPath := expandPath(sshKey)
 
-		authMethod, closeSSHAgent, err := loadPublickey(sshKeyPath)
+		authMethod, closeSSHAgent, err := loadAuthMethod(sshKeyPath)
 		if err != nil {
-			return errors.Wrapf(err, "unable to load the ssh key with path %q", sshKeyPath)
+			return err
 		}
 
 		defer closeSSHAgent()
@@ -363,12 +363,22 @@ func sshAgent(publicKeyPath string) (ssh.AuthMethod, func() error) {
 	return nil, func() error { return nil }
 }
 
-func loadPublickey(path string) (ssh.AuthMethod, func() error, error) {
+func loadAuthMethod(privateKeyPath string) (ssh.AuthMethod, func() error, error) {
 	noopCloseFunc := func() error { return nil }
 
-	key, err := ioutil.ReadFile(path)
+	if privateKeyPath == "" {
+		sshAgent, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
+
+		if err != nil {
+			return nil, noopCloseFunc, errors.Wrapf(err, "unable to reach SSH Agent")
+		}
+
+		return ssh.PublicKeysCallback(agent.NewClient(sshAgent).Signers), sshAgent.Close, nil
+	}
+
+	key, err := ioutil.ReadFile(privateKeyPath)
 	if err != nil {
-		return nil, noopCloseFunc, fmt.Errorf("unable to read file: %s, %s", path, err)
+		return nil, noopCloseFunc, fmt.Errorf("unable to read file: %s, %s", privateKeyPath, err)
 	}
 
 	signer, err := ssh.ParsePrivateKey(key)
@@ -377,14 +387,14 @@ func loadPublickey(path string) (ssh.AuthMethod, func() error, error) {
 			return nil, noopCloseFunc, fmt.Errorf("unable to parse private key: %s", err.Error())
 		}
 
-		agent, close := sshAgent(path + ".pub")
+		agent, close := sshAgent(privateKeyPath + ".pub")
 		if agent != nil {
 			return agent, close, nil
 		}
 
 		defer close()
 
-		fmt.Printf("Enter passphrase for '%s': ", path)
+		fmt.Printf("Enter passphrase for '%s': ", privateKeyPath)
 		STDIN := int(os.Stdin.Fd())
 		bytePassword, _ := terminal.ReadPassword(STDIN)
 

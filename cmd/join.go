@@ -26,7 +26,7 @@ func MakeJoin() *cobra.Command {
 	command.Flags().String("user", "root", "Username for SSH login")
 	command.Flags().String("server-user", "root", "Server username for SSH login (Default to --user)")
 
-	command.Flags().String("ssh-key", "~/.ssh/id_rsa", "The ssh key to use for remote login")
+	command.Flags().String("ssh-key", "", "The ssh key to use for remote login")
 	command.Flags().Int("ssh-port", 22, "The port on which to connect for ssh")
 	command.Flags().Int("server-ssh-port", 22, "The port on which to connect to server for ssh (Default to --ssh-port)")
 	command.Flags().Bool("skip-install", false, "Skip the k3s installer")
@@ -100,9 +100,9 @@ func MakeJoin() *cobra.Command {
 
 		sshKeyPath := expandPath(sshKey)
 
-		authMethod, closeSSHAgent, err := loadPublickey(sshKeyPath)
+		authMethod, closeSSHAgent, err := loadAuthMethod(sshKeyPath)
 		if err != nil {
-			return errors.Wrapf(err, "unable to load the ssh key with path %q", sshKeyPath)
+			return err
 		}
 
 		defer closeSSHAgent()
@@ -177,7 +177,7 @@ func MakeJoin() *cobra.Command {
 
 func setupAdditionalServer(serverIP, ip net.IP, port int, user, sshKeyPath, joinToken, k3sExtraArgs, k3sVersion, k3sChannel string, printCommand bool) error {
 
-	authMethod, closeSSHAgent, err := loadPublickey(sshKeyPath)
+	authMethod, closeSSHAgent, err := loadAuthMethod(sshKeyPath)
 	if err != nil {
 		return errors.Wrapf(err, "unable to load the ssh key with path %q", sshKeyPath)
 	}
@@ -235,7 +235,7 @@ func setupAdditionalServer(serverIP, ip net.IP, port int, user, sshKeyPath, join
 
 func setupAgent(serverIP, ip net.IP, port int, user, sshKeyPath, joinToken, k3sExtraArgs, k3sVersion, k3sChannel string, printCommand bool) error {
 
-	authMethod, closeSSHAgent, err := loadPublickey(sshKeyPath)
+	authMethod, closeSSHAgent, err := loadAuthMethod(sshKeyPath)
 	if err != nil {
 		return errors.Wrapf(err, "unable to load the ssh key with path %q", sshKeyPath)
 	}
